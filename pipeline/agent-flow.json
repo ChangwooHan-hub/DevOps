@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "name": "github_ai_agent_dev_flow",
+  "states": [
+    "OPEN",
+    "TRIAGED",
+    "PLANNED",
+    "APPROVED_FOR_DEV",
+    "IN_PROGRESS",
+    "DRAFT_PR",
+    "VALIDATING",
+    "REVIEWING",
+    "CHANGES_REQUESTED",
+    "REVIEW_PASSED",
+    "MERGE_READY",
+    "MERGED",
+    "HUMAN_REQUIRED",
+    "QUARANTINED",
+    "CANCELLED"
+  ],
+  "transitions": [
+    { "from": "OPEN", "to": ["TRIAGED", "CANCELLED"] },
+    { "from": "TRIAGED", "to": ["PLANNED", "CANCELLED"] },
+    { "from": "PLANNED", "to": ["APPROVED_FOR_DEV", "HUMAN_REQUIRED", "CANCELLED"] },
+    { "from": "APPROVED_FOR_DEV", "to": ["IN_PROGRESS", "CANCELLED"] },
+    { "from": "IN_PROGRESS", "to": ["DRAFT_PR", "HUMAN_REQUIRED", "QUARANTINED", "CANCELLED"] },
+    { "from": "DRAFT_PR", "to": ["VALIDATING", "CHANGES_REQUESTED", "CANCELLED"] },
+    { "from": "VALIDATING", "to": ["REVIEWING", "HUMAN_REQUIRED", "QUARANTINED", "CANCELLED"] },
+    { "from": "REVIEWING", "to": ["REVIEW_PASSED", "CHANGES_REQUESTED", "HUMAN_REQUIRED", "CANCELLED"] },
+    { "from": "CHANGES_REQUESTED", "to": ["IN_PROGRESS", "CANCELLED"] },
+    { "from": "REVIEW_PASSED", "to": ["MERGE_READY", "HUMAN_REQUIRED", "CANCELLED"] },
+    { "from": "MERGE_READY", "to": ["MERGED", "HUMAN_REQUIRED", "CANCELLED"] },
+    { "from": "HUMAN_REQUIRED", "to": ["APPROVED_FOR_DEV", "QUARANTINED", "CANCELLED"] },
+    { "from": "QUARANTINED", "to": ["HUMAN_REQUIRED", "CANCELLED"] },
+    { "from": "MERGED", "to": [] },
+    { "from": "CANCELLED", "to": [] }
+  ],
+  "agents": [
+    {
+      "name": "issue_triage_agent",
+      "trigger": "github.issue.opened",
+      "input": ["issue_title", "issue_body", "labels", "repository"],
+      "output": ["triage_summary", "work_type", "labels", "next_action"],
+      "default_transition": { "from": "OPEN", "to": "TRIAGED" }
+    },
+    {
+      "name": "scaffold_agent",
+      "trigger": "state.TRIAGED",
+      "input": ["work_item", "triage_summary"],
+      "output": ["branch_name", "initial_scaffold_files"],
+      "default_transition": { "from": "TRIAGED", "to": "PLANNED" }
+    },
+    {
+      "name": "coding_agent",
+      "trigger": "state.APPROVED_FOR_DEV",
+      "input": ["work_item", "planning_doc", "budget_limits"],
+      "output": ["patch", "commits", "pull_request"],
+      "default_transition": { "from": "APPROVED_FOR_DEV", "to": "IN_PROGRESS" }
+    },
+    {
+      "name": "code_review_agent",
+      "trigger": "state.DRAFT_PR",
+      "input": ["pull_request", "changed_files", "validation_results"],
+      "output": ["review_findings", "blocking_count", "recommendation"],
+      "default_transition": { "from": "REVIEWING", "to": "REVIEW_PASSED" }
+    },
+    {
+      "name": "merge_decision_agent",
+      "trigger": "state.REVIEW_PASSED",
+      "input": ["review_summary", "required_checks", "approval_status"],
+      "output": ["merge_ready", "blocking_reasons", "next_action"],
+      "default_transition": { "from": "REVIEW_PASSED", "to": "MERGE_READY" }
+    }
+  ],
+  "gates": [
+    {
+      "name": "plan_approval_gate",
+      "required_for_transition": "PLANNED->APPROVED_FOR_DEV",
+      "approval_subject": "plan",
+      "required_action": "approved"
+    },
+    {
+      "name": "merge_approval_gate",
+      "required_for_transition": "REVIEW_PASSED->MERGE_READY",
+      "approval_subject": "merge",
+      "required_action": "approved"
+    }
+  ]
+}
