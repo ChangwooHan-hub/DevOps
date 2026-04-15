@@ -1,0 +1,38 @@
+name: uwb-infra
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: uwb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: uwb
+      POSTGRES_PASSWORD: uwb
+      POSTGRES_DB: uwb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uwb -d uwb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - uwb_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: uwb-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - uwb_redis_data:/data
+
+volumes:
+  uwb_postgres_data:
+  uwb_redis_data:

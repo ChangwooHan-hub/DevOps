@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/domain/tsconfig.json"
+    },
+    {
+      "path": "./services/webhook-api/tsconfig.app.json"
+    },
+    {
+      "path": "./services/orchestrator/tsconfig.app.json"
+    },
+    {
+      "path": "./services/runner-service/tsconfig.app.json"
+    },
+    {
+      "path": "./services/llm-gateway/tsconfig.app.json"
+    }
+  ]
+}
