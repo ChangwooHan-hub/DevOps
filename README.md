@@ -1,16 +1,42 @@
-# DevOps
+# UWB AI Pipeline
 
-GitHub 기반 AI Agent 개발 흐름(이슈 #1) 설계 및 검증용 저장소입니다.
+NestJS monorepo for a GitHub-integrated AI agent pipeline.
 
-## 포함 항목
+## Services
 
-- [docs/github-ai-agent-dev-flow.md](docs/github-ai-agent-dev-flow.md): 이슈 생성부터 Merge Decision까지의 설계서
-- [pipeline/agent-flow.json](pipeline/agent-flow.json): 기계가 읽을 수 있는 파이프라인 정의
-- [scripts/validate_agent_flow.py](scripts/validate_agent_flow.py): 파이프라인 정의 검증 스크립트
-- [.github/workflows/agent-flow-check.yml](.github/workflows/agent-flow-check.yml): PR 시 파이프라인 정의 정적 검증
+- `services/webhook-api`: GitHub webhook ingress, signature verification, allowlist checks, optional queue enqueue, webhook dedupe
+- `services/orchestrator`: durable-ready work item orchestration, transition gates, immutable approval ledger API, queue consumer
+- `services/orchestrator`: durable-ready work item orchestration, transition gates, immutable approval ledger API, queue consumer, auto-trigger to runner on `APPROVED_FOR_DEV`
+- `services/runner-service`: budget-checked execution planning, coding/review/merge-decision agent loops (LLM -> patch/review/decision), plus deterministic validation runs
+- `services/llm-gateway`: structured LLM call boundary
+- `services/ops-ui`: placeholder for the admin UI
 
-## 로컬 검증
+## Shared Packages
+
+- `packages/domain`: shared enums and event contracts
+
+## Quick Start
 
 ```bash
-python scripts/validate_agent_flow.py
+cmd /c npm.cmd install
+cmd /c npm.cmd run db:migrate
+cmd /c npm.cmd run build
+cmd /c npm.cmd run start:webhook-api
 ```
+
+## Agent Spec
+
+- `agents.md` defines role instructions for:
+  - `planning_agent`
+  - `coding_agent`
+  - `code_review_agent`
+  - `merge_decision_agent`
+- `runner-service` loads this file at runtime (`AGENTS_SPEC_PATH`).
+- If `AGENTS_SPEC_REQUIRED=true`, missing/empty role sections will fail runs.
+- Real coding execution is blocked when `LLM_PROVIDER=mock` unless `RUNNER_ALLOW_MOCK_EXECUTION=true`.
+
+## Next Steps
+
+1. Wire PostgreSQL migration execution and Redis provisioning for non-local environments.
+2. Extend artifact storage from inline metadata to object storage-backed blobs.
+3. Connect runner execution to isolated worktrees/containers and full CI policy checks.

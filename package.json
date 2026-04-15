@@ -1,0 +1,43 @@
+{
+  "name": "@uwb/root",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "nest build webhook-api orchestrator runner-service llm-gateway",
+    "db:migrate": "node scripts/run-migrations.js",
+    "start:webhook-api": "nest start webhook-api",
+    "start:orchestrator": "nest start orchestrator",
+    "start:runner-service": "nest start runner-service",
+    "start:llm-gateway": "nest start llm-gateway",
+    "start:dev:webhook-api": "nest start webhook-api --watch",
+    "start:dev:orchestrator": "nest start orchestrator --watch",
+    "start:dev:runner-service": "nest start runner-service --watch",
+    "start:dev:llm-gateway": "nest start llm-gateway --watch"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.7",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.0.7",
+    "@nestjs/platform-express": "^11.0.7",
+    "bullmq": "^5.56.1",
+    "ioredis": "^5.8.1",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.5",
+    "@nestjs/schematics": "^11.0.1",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.15.6",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.2"
+  }
+}

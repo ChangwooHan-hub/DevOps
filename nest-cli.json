@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "monorepo": true,
+  "root": "services/webhook-api",
+  "projects": {
+    "webhook-api": {
+      "type": "application",
+      "root": "services/webhook-api",
+      "entryFile": "main",
+      "sourceRoot": "services/webhook-api/src",
+      "compilerOptions": {
+        "tsConfigPath": "services/webhook-api/tsconfig.app.json"
+      }
+    },
+    "orchestrator": {
+      "type": "application",
+      "root": "services/orchestrator",
+      "entryFile": "main",
+      "sourceRoot": "services/orchestrator/src",
+      "compilerOptions": {
+        "tsConfigPath": "services/orchestrator/tsconfig.app.json"
+      }
+    },
+    "runner-service": {
+      "type": "application",
+      "root": "services/runner-service",
+      "entryFile": "main",
+      "sourceRoot": "services/runner-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "services/runner-service/tsconfig.app.json"
+      }
+    },
+    "llm-gateway": {
+      "type": "application",
+      "root": "services/llm-gateway",
+      "entryFile": "main",
+      "sourceRoot": "services/llm-gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "services/llm-gateway/tsconfig.app.json"
+      }
+    }
+  }
+}
+

@@ -1,0 +1,1155 @@
+openapi: 3.1.0
+info:
+  title: UWB AI Pipeline API
+  version: 0.1.0
+  summary: Initial HTTP surface for the GitHub-driven AI agent pipeline scaffold.
+  description: >
+    This spec covers the current NestJS scaffold endpoints for webhook ingestion,
+    orchestration, runner planning, and the LLM gateway. Internal authentication,
+    persistence-backed semantics, and queue-backed async behavior are still pending.
+servers:
+  - url: http://localhost:3000
+    description: webhook-api local development
+  - url: http://localhost:3001
+    description: orchestrator local development
+  - url: http://localhost:3002
+    description: runner-service local development
+  - url: http://localhost:3003
+    description: llm-gateway local development
+tags:
+  - name: webhook-api
+  - name: orchestrator
+  - name: runner-service
+  - name: llm-gateway
+paths:
+  /health:
+    get:
+      tags:
+        - webhook-api
+      summary: Webhook API health check
+      operationId: getWebhookApiHealth
+      responses:
+        '200':
+          description: Service liveness response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                webhookApi:
+                  value:
+                    status: ok
+                    service: webhook-api
+  /github/webhooks:
+    post:
+      tags:
+        - webhook-api
+      summary: Receive and verify a GitHub webhook
+      operationId: handleGithubWebhook
+      parameters:
+        - name: X-GitHub-Event
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-GitHub-Delivery
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '202':
+          description: Webhook accepted or deduplicated
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GithubWebhookAcceptedResponse'
+                  - $ref: '#/components/schemas/GithubWebhookDuplicateResponse'
+        '401':
+          description: Signature verification failed
+  /work-items:
+    get:
+      tags:
+        - orchestrator
+      summary: List work items
+      operationId: listWorkItems
+      responses:
+        '200':
+          description: Current in-memory work items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkItem'
+    post:
+      tags:
+        - orchestrator
+      summary: Create a work item from issue-like input
+      operationId: createWorkItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkItemRequest'
+      responses:
+        '201':
+          description: Work item created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+  /work-items/{id}:
+    get:
+      tags:
+        - orchestrator
+      summary: Get a work item by ID
+      operationId: getWorkItemById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Work item found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '404':
+          description: Work item not found
+  /work-items/{id}/transitions:
+    get:
+      tags:
+        - orchestrator
+      summary: List state transitions for a work item
+      operationId: listWorkItemTransitions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Work item transition history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StateTransition'
+        '404':
+          description: Work item not found
+  /work-items/{id}/state:
+    patch:
+      tags:
+        - orchestrator
+      summary: Transition a work item state
+      operationId: transitionWorkItem
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionWorkItemRequest'
+      responses:
+        '200':
+          description: Work item updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '404':
+          description: Work item not found
+  /approvals:
+    post:
+      tags:
+        - orchestrator
+      summary: Append an approval event
+      operationId: appendApprovalEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApprovalEventRequest'
+      responses:
+        '201':
+          description: Approval event created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalEvent'
+  /approvals/{workItemId}:
+    get:
+      tags:
+        - orchestrator
+      summary: List approval events by work item
+      operationId: listApprovalEvents
+      parameters:
+        - name: workItemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Approval ledger events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalEvent'
+  /runner/execution-plans:
+    post:
+      tags:
+        - runner-service
+      summary: Build an execution plan for a Dev Agent run
+      operationId: createRunnerExecutionPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExecutionPlanRequest'
+      responses:
+        '201':
+          description: Execution plan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionPlan'
+  /runner/executions:
+    post:
+      tags:
+        - runner-service
+      summary: Execute or dry-run a runner plan
+      operationId: executeRunnerPlan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExecutionRunRequest'
+      responses:
+        '201':
+          description: Runner execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionRunResponse'
+  /runner/agent-runs:
+    post:
+      tags:
+        - runner-service
+      summary: Execute coding agent loop (LLM -> patch -> PR)
+      operationId: executeCodingAgentRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRunRequest'
+      responses:
+        '201':
+          description: Agent run execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentRunResponse'
+  /runner/validation-runs:
+    post:
+      tags:
+        - runner-service
+      summary: Execute deterministic validation commands
+      operationId: createValidationRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateValidationRunRequest'
+      responses:
+        '201':
+          description: Validation run result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationRunResponse'
+  /llm/schemas:
+    get:
+      tags:
+        - llm-gateway
+      summary: List supported structured output schemas
+      operationId: listLlmSchemas
+      responses:
+        '200':
+          description: Supported schema names and required fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StructuredSchemaInfo'
+  /llm/structured-completions:
+    post:
+      tags:
+        - llm-gateway
+      summary: Produce a structured completion
+      operationId: createStructuredCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StructuredCompletionRequest'
+      responses:
+        '201':
+          description: Structured completion response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuredCompletionResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+      properties:
+        status:
+          type: string
+          example: ok
+        service:
+          type: string
+          example: webhook-api
+    GithubDomainEvent:
+      type: object
+      required:
+        - deliveryId
+        - eventName
+        - repositoryId
+        - receivedAt
+      properties:
+        deliveryId:
+          type: string
+        eventName:
+          type: string
+        action:
+          type: string
+        repositoryId:
+          type: integer
+        installationId:
+          type: integer
+        receivedAt:
+          type: string
+          format: date-time
+    GithubWebhookAcceptedResponse:
+      type: object
+      required:
+        - accepted
+        - routedTo
+        - event
+      properties:
+        accepted:
+          type: boolean
+          const: true
+        routedTo:
+          type: string
+          example: orchestrator-queue
+        event:
+          $ref: '#/components/schemas/GithubDomainEvent'
+    GithubWebhookDuplicateResponse:
+      type: object
+      required:
+        - accepted
+        - duplicate
+        - deliveryId
+      properties:
+        accepted:
+          type: boolean
+          const: false
+        duplicate:
+          type: boolean
+          const: true
+        deliveryId:
+          type: string
+    WorkItem:
+      type: object
+      required:
+        - id
+        - repositoryId
+        - sourceType
+        - title
+        - state
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        repositoryId:
+          type: string
+        sourceType:
+          type: string
+          enum:
+            - issue
+            - pull_request
+        issueNumber:
+          type: integer
+        prNumber:
+          type: integer
+        title:
+          type: string
+        state:
+          $ref: '#/components/schemas/WorkItemState'
+        riskLevel:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        currentBranch:
+          type: string
+        currentHeadSha:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    WorkItemState:
+      type: string
+      enum:
+        - OPEN
+        - TRIAGED
+        - PLANNED
+        - APPROVED_FOR_DEV
+        - IN_PROGRESS
+        - DRAFT_PR
+        - VALIDATING
+        - REVIEWING
+        - CHANGES_REQUESTED
+        - REVIEW_PASSED
+        - MERGE_READY
+        - MERGED
+        - HUMAN_REQUIRED
+        - QUARANTINED
+        - CANCELLED
+    CreateWorkItemRequest:
+      type: object
+      required:
+        - title
+        - repositoryId
+        - issueNumber
+      properties:
+        title:
+          type: string
+        repositoryId:
+          type: string
+        issueNumber:
+          type: integer
+    TransitionWorkItemRequest:
+      type: object
+      required:
+        - state
+      properties:
+        state:
+          $ref: '#/components/schemas/WorkItemState'
+        actorType:
+          type: string
+          enum:
+            - user
+            - agent
+            - system
+        actorId:
+          type: string
+        reason:
+          type: string
+    StateTransition:
+      type: object
+      required:
+        - id
+        - workItemId
+        - toState
+        - actorType
+        - actorId
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workItemId:
+          type: string
+          format: uuid
+        fromState:
+          $ref: '#/components/schemas/WorkItemState'
+        toState:
+          $ref: '#/components/schemas/WorkItemState'
+        actorType:
+          type: string
+          enum:
+            - user
+            - agent
+            - system
+        actorId:
+          type: string
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ApprovalAction:
+      type: string
+      enum:
+        - approved
+        - rejected
+        - revoked
+        - superseded
+    ApprovalActorType:
+      type: string
+      enum:
+        - user
+        - agent
+        - system
+    CreateApprovalEventRequest:
+      type: object
+      required:
+        - workItemId
+        - subjectType
+        - subjectId
+        - action
+        - actorType
+        - actorId
+      properties:
+        workItemId:
+          type: string
+          format: uuid
+        subjectType:
+          type: string
+        subjectId:
+          type: string
+        action:
+          $ref: '#/components/schemas/ApprovalAction'
+        actorType:
+          $ref: '#/components/schemas/ApprovalActorType'
+        actorId:
+          type: string
+        reason:
+          type: string
+    ApprovalEvent:
+      type: object
+      required:
+        - id
+        - workItemId
+        - subjectType
+        - subjectId
+        - action
+        - actorType
+        - actorId
+        - eventHash
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workItemId:
+          type: string
+          format: uuid
+        subjectType:
+          type: string
+        subjectId:
+          type: string
+        action:
+          $ref: '#/components/schemas/ApprovalAction'
+        actorType:
+          $ref: '#/components/schemas/ApprovalActorType'
+        actorId:
+          type: string
+        reason:
+          type: string
+        prevEventId:
+          type: string
+          format: uuid
+        prevHash:
+          type: string
+        eventHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    RunnerBudget:
+      type: object
+      required:
+        - maxRuntimeSeconds
+        - maxChangedFiles
+        - maxLocDelta
+        - maxLlmCalls
+      properties:
+        maxRuntimeSeconds:
+          type: integer
+        maxChangedFiles:
+          type: integer
+        maxLocDelta:
+          type: integer
+        maxLlmCalls:
+          type: integer
+    CreateExecutionPlanRequest:
+      type: object
+      required:
+        - repository
+        - branchName
+        - budget
+      properties:
+        repository:
+          type: string
+          example: org/repo
+        branchName:
+          type: string
+          example: fix/198-null-refresh-token
+        budget:
+          $ref: '#/components/schemas/RunnerBudget'
+    ExecutionPlan:
+      type: object
+      required:
+        - repository
+        - branchName
+        - budget
+        - executionMode
+        - nextSteps
+      properties:
+        repository:
+          type: string
+        branchName:
+          type: string
+        budget:
+          $ref: '#/components/schemas/RunnerBudget'
+        executionMode:
+          type: string
+          enum:
+            - ephemeral
+        nextSteps:
+          type: array
+          items:
+            type: string
+    CreateExecutionRunRequest:
+      type: object
+      required:
+        - repository
+        - branchName
+        - budget
+        - repositoryPath
+      properties:
+        repository:
+          type: string
+        branchName:
+          type: string
+        budget:
+          $ref: '#/components/schemas/RunnerBudget'
+        repositoryPath:
+          type: string
+        dryRun:
+          type: boolean
+    CreateAgentRunRequest:
+      type: object
+      required:
+        - repository
+        - repositoryPath
+        - taskPrompt
+        - budget
+      properties:
+        repository:
+          type: string
+          example: org/repo
+        repositoryPath:
+          type: string
+        taskPrompt:
+          type: string
+        budget:
+          $ref: '#/components/schemas/RunnerBudget'
+        workItemId:
+          type: string
+          format: uuid
+        model:
+          type: string
+        baseBranch:
+          type: string
+        branchName:
+          type: string
+        prBaseBranch:
+          type: string
+        openPullRequest:
+          type: boolean
+        draftPullRequest:
+          type: boolean
+        dryRun:
+          type: boolean
+        validationCommands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCommand'
+        validationTimeoutSeconds:
+          type: integer
+          minimum: 1
+    AgentRunPullRequest:
+      type: object
+      required:
+        - number
+        - url
+        - state
+        - draft
+      properties:
+        number:
+          type: integer
+        url:
+          type: string
+        state:
+          type: string
+        draft:
+          type: boolean
+    AgentRunValidationSummary:
+      type: object
+      required:
+        - passed
+      properties:
+        passed:
+          type: boolean
+        skipped:
+          type: boolean
+    AgentRunResponse:
+      type: object
+      required:
+        - startedAt
+        - mode
+        - repository
+        - repositoryPath
+        - baseBranch
+        - branchName
+        - actualLlmCalls
+      properties:
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        mode:
+          type: string
+          enum:
+            - dry-run
+            - executed
+        runId:
+          type: string
+          format: uuid
+        repository:
+          type: string
+        repositoryPath:
+          type: string
+        baseBranch:
+          type: string
+        branchName:
+          type: string
+        planning:
+          $ref: '#/components/schemas/PlanningOutput'
+        coding:
+          type: object
+          properties:
+            summary:
+              type: string
+            commitMessage:
+              type: string
+            prTitle:
+              type: string
+        codingPreview:
+          type: object
+          properties:
+            summary:
+              type: string
+            commitMessage:
+              type: string
+            prTitle:
+              type: string
+            patchBytes:
+              type: integer
+              minimum: 0
+        actualLlmCalls:
+          type: integer
+          minimum: 0
+        changedFiles:
+          type: integer
+          minimum: 0
+        locDelta:
+          type: integer
+          minimum: 0
+        validation:
+          oneOf:
+            - $ref: '#/components/schemas/ValidationRunResponse'
+            - $ref: '#/components/schemas/AgentRunValidationSummary'
+        pullRequest:
+          $ref: '#/components/schemas/AgentRunPullRequest'
+    ExecutionRunResponse:
+      type: object
+      required:
+        - repository
+        - branchName
+        - budget
+        - executionMode
+        - nextSteps
+        - dryRun
+        - executed
+      properties:
+        repository:
+          type: string
+        branchName:
+          type: string
+        budget:
+          $ref: '#/components/schemas/RunnerBudget'
+        executionMode:
+          type: string
+        nextSteps:
+          type: array
+          items:
+            type: string
+        dryRun:
+          type: boolean
+        executed:
+          type: boolean
+        result:
+          type: string
+    ValidationCommand:
+      type: object
+      required:
+        - name
+        - command
+      properties:
+        name:
+          type: string
+        command:
+          type: string
+    CreateValidationRunRequest:
+      type: object
+      required:
+        - repositoryPath
+      properties:
+        repositoryPath:
+          type: string
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCommand'
+        timeoutSeconds:
+          type: integer
+          minimum: 1
+    ValidationCommandResult:
+      type: object
+      required:
+        - name
+        - command
+        - passed
+        - stdout
+        - stderr
+        - durationMs
+      properties:
+        name:
+          type: string
+        command:
+          type: string
+        passed:
+          type: boolean
+        stdout:
+          type: string
+        stderr:
+          type: string
+        durationMs:
+          type: integer
+          minimum: 0
+        exitCode:
+          type: integer
+    ValidationRunResponse:
+      type: object
+      required:
+        - passed
+        - mode
+        - timeoutSeconds
+        - commands
+      properties:
+        passed:
+          type: boolean
+        mode:
+          type: string
+          enum:
+            - deterministic
+        timeoutSeconds:
+          type: integer
+          minimum: 1
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationCommandResult'
+    StructuredCompletionRequest:
+      type: object
+      required:
+        - model
+        - systemPrompt
+        - userPrompt
+        - schemaName
+      properties:
+        model:
+          type: string
+        systemPrompt:
+          type: string
+        userPrompt:
+          type: string
+        schemaName:
+          type: string
+          enum:
+            - triage_output
+            - planning_output
+            - review_output
+            - merge_readiness_output
+            - coding_patch_output
+    StructuredSchemaInfo:
+      type: object
+      required:
+        - schemaName
+        - requiredFields
+      properties:
+        schemaName:
+          type: string
+          enum:
+            - triage_output
+            - planning_output
+            - review_output
+            - merge_readiness_output
+            - coding_patch_output
+        requiredFields:
+          type: array
+          items:
+            type: string
+    TriageOutput:
+      type: object
+      required:
+        - summary
+        - workType
+        - impactAreas
+        - suggestedLabels
+        - nextAction
+      properties:
+        summary:
+          type: string
+        workType:
+          type: string
+          enum:
+            - bug
+            - feature
+            - refactor
+        impactAreas:
+          type: array
+          items:
+            type: string
+        suggestedLabels:
+          type: array
+          items:
+            type: string
+        nextAction:
+          type: string
+    PlanningOutput:
+      type: object
+      required:
+        - summary
+        - branchName
+        - candidateFiles
+        - testPlan
+        - riskLevel
+        - executionBudget
+        - nextAction
+      properties:
+        summary:
+          type: string
+        branchName:
+          type: string
+        candidateFiles:
+          type: array
+          items:
+            type: string
+        testPlan:
+          type: array
+          items:
+            type: string
+        riskLevel:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        executionBudget:
+          $ref: '#/components/schemas/RunnerBudget'
+        nextAction:
+          type: string
+    ReviewFinding:
+      type: object
+      required:
+        - severity
+        - filePath
+        - line
+        - message
+      properties:
+        severity:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+        filePath:
+          type: string
+        line:
+          type: integer
+          minimum: 1
+        message:
+          type: string
+    ReviewOutput:
+      type: object
+      required:
+        - summary
+        - findings
+        - blockingFindingsCount
+        - nextAction
+      properties:
+        summary:
+          type: string
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReviewFinding'
+        blockingFindingsCount:
+          type: integer
+          minimum: 0
+        nextAction:
+          type: string
+    MergeReadinessOutput:
+      type: object
+      required:
+        - mergeReady
+        - blockingReasons
+        - requiredApprovalsRemaining
+        - requiredChecksPending
+        - policyBlocks
+        - nextAction
+      properties:
+        mergeReady:
+          type: boolean
+        blockingReasons:
+          type: array
+          items:
+            type: string
+        requiredApprovalsRemaining:
+          type: integer
+          minimum: 0
+        requiredChecksPending:
+          type: array
+          items:
+            type: string
+        policyBlocks:
+          type: array
+          items:
+            type: string
+        nextAction:
+          type: string
+    CodingPatchOutput:
+      type: object
+      required:
+        - summary
+        - commitMessage
+        - patch
+        - prTitle
+        - prBody
+        - validationCommands
+      properties:
+        summary:
+          type: string
+        commitMessage:
+          type: string
+        patch:
+          type: string
+        prTitle:
+          type: string
+        prBody:
+          type: string
+        validationCommands:
+          type: array
+          items:
+            type: string
+    StructuredCompletionResponse:
+      type: object
+      required:
+        - model
+        - schemaName
+        - accepted
+        - provider
+        - latencyMs
+        - output
+      properties:
+        model:
+          type: string
+        schemaName:
+          type: string
+        accepted:
+          type: boolean
+        provider:
+          type: string
+          enum:
+            - mock
+            - openai-compatible
+        latencyMs:
+          type: integer
+          minimum: 0
+        output:
+          oneOf:
+            - $ref: '#/components/schemas/TriageOutput'
+            - $ref: '#/components/schemas/PlanningOutput'
+            - $ref: '#/components/schemas/ReviewOutput'
+            - $ref: '#/components/schemas/MergeReadinessOutput'
+            - $ref: '#/components/schemas/CodingPatchOutput'
+        usage:
+          type: object
+          properties:
+            inputTokens:
+              type: integer
+              minimum: 0
+            outputTokens:
+              type: integer
+              minimum: 0
+            totalTokens:
+              type: integer
+              minimum: 0
